@@ -1,0 +1,25 @@
+Media torrent server
+A server to download media files from other peers via bittorrent protocol L<Net::BitTorrent::Protocol::BEP03>, 
+and to stream them to other peers via HTTP.
+
+Users of the server can download and stream media files from the server.
+
+Has a web api to command the service:
+
+/list - list all torrents
+/download/{magnet_link} - add a torrent and initiate download
+
+/remove/{id} - remove a torrent, terminate download and delete data
+/pause/{id} - pause a torrent
+/resume/{id} - resume a (paused) torrent
+/info/{id} - get info of a torrent
+/status - get server status (number of torrents, etc)
+
+
+High level overview:
+
+- Web interface to connect to the server and download/stream media files from it to chromecast
+- Go BitTorrent protocol Implementation (see L<Net::BitTorrent::Protocol::BEP03>)
+- Web api to control the server
+- chromecast web receiver application to stream to chromecast devices (more useful later)
+
