@@ -2,6 +2,7 @@ package torrent
 
 import (
 	"fmt"
+	"net/url"
 	"sync"
 	"torrent-pi/peer"
 )
@@ -17,7 +18,7 @@ func (t Torrent) AnnounceAll(port uint16) []peer.Peer {
 	for i, tracker := range t.Trackers {
 		wg.Add(i)
 		fmt.Println("Announcing to", tracker.Hostname())
-		go func() {
+		go func(tracker *url.URL) {
 			defer wg.Done()
 			var peers []peer.Peer
 			var err error
@@ -36,7 +37,7 @@ func (t Torrent) AnnounceAll(port uint16) []peer.Peer {
 				return
 			}
 			peerChan <- peers
-		}()
+		}(tracker)
 	}
 
 	// Wait for trackers to finish
@@ -56,7 +57,7 @@ func (t Torrent) AnnounceRace(port uint16) []peer.Peer {
 	once := sync.Once{}
 
 	for _, tracker := range t.Trackers {
-		go func() {
+		go func(tracker *url.URL) {
 			var peers []peer.Peer
 			var err error
 
@@ -66,7 +67,7 @@ func (t Torrent) AnnounceRace(port uint16) []peer.Peer {
 			case "udp":
 				peers, err = t.announceUDP(*tracker, port)
 			default:
-				fmt.Println("unsupporter tracker scheme:", tracker.Scheme)
+				fmt.Println("unsupported tracker scheme:", tracker.Scheme)
 				return
 			}
 			if err != nil {
@@ -74,7 +75,7 @@ func (t Torrent) AnnounceRace(port uint16) []peer.Peer {
 				return
 			}
 			once.Do(func() { peerChan <- peers })
-		}()
+		}(tracker)
 	}
 
 	return <-peerChan

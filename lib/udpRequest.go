@@ -22,7 +22,7 @@ func UDPRequest(address string, reader io.Reader) (res []byte, err error) {
 	doneChan := make(chan error, 1)
 	bytesChan := make(chan []byte, 1)
 	go func() {
-		buffer := make([]byte, 1024)
+		buffer := make([]byte, 1024*512) // 0.5 mb buffer
 
 		// Copy to the connection from the reader
 		_, err := io.Copy(conn, reader)

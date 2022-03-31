@@ -101,13 +101,13 @@ func NewExtensionClient(peer peer.Peer, peerID, infoHash [20]byte) (*MetadataCli
 	}
 	fmt.Println("Connected with: ", peer.String())
 	// Send/recieve bittorrent handshake
-	_, err = completeHandshake(conn, infoHash, peerID)
+	h, err := completeHandshake(conn, infoHash, peerID)
 	if err != nil {
 		conn.Close()
 		return nil, err
 	}
-
 	fmt.Println("completed handshake!")
+	fmt.Println("Supported extensions:", h.Extensions)
 	// Send/recieve extension handshake
 	_, err = completeExtensionHandshake(conn)
 
@@ -126,6 +126,9 @@ func completeExtensionHandshake(conn net.Conn) ([]byte, error) {
 		return nil, err
 	}
 	h, err := handshake.ReadExtension(conn)
+	if err != nil {
+		fmt.Println("Read Extension error:", err.Error())
+	}
 	fmt.Println(h)
 
 	buf := make([]byte, 0)

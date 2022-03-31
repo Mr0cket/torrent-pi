@@ -15,18 +15,21 @@ The Peer ID that we made up to identify ourselves
 */
 
 type Handshake struct {
-	Pstr     string
-	InfoHash [20]byte
-	PeerID   [20]byte
+	Pstr       string
+	InfoHash   [20]byte
+	PeerID     [20]byte
+	Extensions [8]byte
 }
 
 // New creates a new handshake with the standard pstr
 func New(infoHash, peerID [20]byte) *Handshake {
-	return &Handshake{
+	t := Handshake{
 		Pstr:     "BitTorrent protocol",
 		InfoHash: infoHash,
 		PeerID:   peerID,
 	}
+	copy(t.Extensions[:], make([]byte, 8)) // TODO: indicate support for metadata extension
+	return &t
 }
 
 func (h *Handshake) Serialize() *bytes.Reader {
@@ -38,8 +41,10 @@ func (h *Handshake) Serialize() *bytes.Reader {
 	curr := 1
 	// Protocol string
 	curr += copy(buf[curr:], h.Pstr)
-	// Empty string for bittorrent protocol extensions
-	curr += copy(buf[curr:], make([]byte, 8))
+	// bittorrent protocol extensions string
+	supportedExtensions := make([]byte, 8)
+	curr += copy(buf[curr:], supportedExtensions)
+
 	curr += copy(buf[curr:], h.InfoHash[:])
 	copy(buf[curr:], h.PeerID[:])
 	return bytes.NewReader(buf[:])
@@ -62,16 +67,20 @@ func Read(r io.Reader) (*Handshake, error) {
 	if err != nil {
 		return nil, err
 	}
+	count := pstrlen
+	var extensions [8]byte
+	count += copy(extensions[:], handshakeBuf[count:count+8])
 
 	var infoHash, peerID [20]byte
 
-	copy(infoHash[:], handshakeBuf[pstrlen+8:pstrlen+8+20])
-	copy(peerID[:], handshakeBuf[pstrlen+8+20:])
+	count += copy(infoHash[:], handshakeBuf[count:count+20])
+	copy(peerID[:], handshakeBuf[count:])
 
 	h := Handshake{
-		Pstr:     string(handshakeBuf[0:pstrlen]),
-		InfoHash: infoHash,
-		PeerID:   peerID,
+		Pstr:       string(handshakeBuf[0:pstrlen]),
+		InfoHash:   infoHash,
+		PeerID:     peerID,
+		Extensions: extensions,
 	}
 
 	return &h, nil

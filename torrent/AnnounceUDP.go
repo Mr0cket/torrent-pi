@@ -37,7 +37,6 @@ func (t *Torrent) announceUDP(tracker url.URL, port uint16) (peers []peer.Peer, 
 	// Send the UDP packet
 	res, err := lib.UDPRequest(tracker.Host, reader)
 	if err != nil {
-		fmt.Println("Error reading UDP tracker:", err)
 		return
 	}
 
