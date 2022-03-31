@@ -7,8 +7,8 @@ import (
 	"math/rand"
 	"net"
 	"net/url"
-	"torrentBox/lib"
-	"torrentBox/peer"
+	"torrent-pi/lib"
+	"torrent-pi/peer"
 )
 
 // Implement announce UDP request
@@ -68,9 +68,9 @@ func (t *Torrent) announceUDP(tracker url.URL, port uint16) (peers []peer.Peer, 
 	// transactionID
 	binary.BigEndian.PutUint32(packet[12:16], transactionID)
 	// info hash
-	copy(packet[16:36], t.InfoHash)
+	copy(packet[16:36], t.InfoHash[:])
 	// peer id
-	copy(packet[36:56], t.PeerID)
+	copy(packet[36:56], t.PeerID[:])
 	// downloaded
 	binary.BigEndian.PutUint64(packet[56:64], t.Downloaded)
 	// left

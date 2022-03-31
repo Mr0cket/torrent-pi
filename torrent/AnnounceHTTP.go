@@ -7,12 +7,10 @@ import (
 	"strconv"
 	"time"
 
-	"torrentBox/peer"
+	"torrent-pi/peer"
 
 	"github.com/jackpal/bencode-go"
 )
-
-var client = &http.Client{}
 
 const protocol_id uint64 = 0x41727101980
 
@@ -50,8 +48,8 @@ func (t *Torrent) announceHTTP(tracker *url.URL, port uint16) (peers []peer.Peer
 
 func (t *Torrent) buildTrackerURL(trackerURL *url.URL, port uint16) (string, error) {
 	params := url.Values{
-		"info_hash":  []string{string(t.InfoHash)},
-		"peer_id":    []string{string(t.PeerID)},
+		"info_hash":  []string{string(t.InfoHash[:])},
+		"peer_id":    []string{string(t.PeerID[:])},
 		"port":       []string{strconv.Itoa(int(port))},
 		"uploaded":   []string{"0"},
 		"downloaded": []string{"0"},

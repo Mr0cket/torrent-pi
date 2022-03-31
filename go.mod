@@ -1,4 +1,4 @@
-module torrentBox
+module torrent-pi
 
 go 1.18
 
