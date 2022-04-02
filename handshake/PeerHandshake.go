@@ -28,7 +28,10 @@ func New(infoHash, peerID [20]byte) *Handshake {
 		InfoHash: infoHash,
 		PeerID:   peerID,
 	}
-	copy(t.Extensions[:], make([]byte, 8)) // TODO: indicate support for metadata extension
+	supportedExtensions := make([]byte, 8)
+	// Set support for extension protocol (byte 5 & 0x10)
+	supportedExtensions[5] = byte(0x10)
+	copy(t.Extensions[:], supportedExtensions) // TODO: indicate support for metadata extension protocol
 	return &t
 }
 
@@ -41,9 +44,9 @@ func (h *Handshake) Serialize() *bytes.Reader {
 	curr := 1
 	// Protocol string
 	curr += copy(buf[curr:], h.Pstr)
+
 	// bittorrent protocol extensions string
-	supportedExtensions := make([]byte, 8)
-	curr += copy(buf[curr:], supportedExtensions)
+	curr += copy(buf[curr:], h.Extensions[:])
 
 	curr += copy(buf[curr:], h.InfoHash[:])
 	copy(buf[curr:], h.PeerID[:])

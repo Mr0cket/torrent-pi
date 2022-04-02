@@ -21,6 +21,7 @@ type Client struct {
 }
 
 type MetadataClient struct {
+	handshake.ExtensionHandshake
 	conn net.Conn
 }
 
@@ -74,26 +75,7 @@ func completeHandshake(conn net.Conn, infohash, peerID [20]byte) (*handshake.Han
 	return res, nil
 }
 
-func (c *Client) SendRequest(pieceIndex, beginByte, length int) error {
-	req := message.FormatRequest(pieceIndex, beginByte, length)
-	c.Conn.Write(req.Serialize())
-	return nil
-}
-
-// Send unchoke message
-func (c *Client) SendUnchoke() error {
-	msg := message.Message{ID: message.MsgUnchoke}
-	_, err := c.Conn.Write(msg.Serialize())
-	return err
-}
-
-func (c *Client) SendInterested() error {
-	msg := message.Message{ID: message.MsgInterested}
-	_, err := c.Conn.Write(msg.Serialize())
-	return err
-}
-
-func NewExtensionClient(peer peer.Peer, peerID, infoHash [20]byte) (*MetadataClient, error) {
+func NewExtension(peer peer.Peer, peerID, infoHash [20]byte) (*MetadataClient, error) {
 	fmt.Println("NewExtensionClient")
 	conn, err := net.DialTimeout("tcp", peer.String(), 3*time.Second)
 	if err != nil {
@@ -107,20 +89,30 @@ func NewExtensionClient(peer peer.Peer, peerID, infoHash [20]byte) (*MetadataCli
 		return nil, err
 	}
 	fmt.Println("completed handshake!")
-	fmt.Println("Supported extensions:", h.Extensions)
-	// Send/recieve extension handshake
-	_, err = completeExtensionHandshake(conn)
 
-	return &MetadataClient{conn}, err
+	// TODO check if "Extension protocol" bit is set
+	// Reserved Bit: 44, the fourth most significant bit in the 6th reserved byte i.e. reserved[5] = 0x10
+	if h.Extensions[5] < byte(0x10) {
+		conn.Close()
+		return nil, fmt.Errorf("Client doesn't support extension handshake")
+	}
+	// Send/recieve extension handshake
+	dict, err := completeExtensionHandshake(conn)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+
+	return &MetadataClient{*dict, conn}, err
 }
 
-func completeExtensionHandshake(conn net.Conn) ([]byte, error) {
+func completeExtensionHandshake(conn net.Conn) (*handshake.ExtensionHandshake, error) {
 	fmt.Println("Starting extension handshake...")
 	conn.SetDeadline(time.Now().Add(time.Second * 4))
 	defer conn.SetDeadline(time.Time{}) // Disable the deadline
 
 	// Create extension handshake
-	req := handshake.NewExtended()
+	req := handshake.NewExtended(6881)
 	_, err := io.Copy(conn, req.Serialize())
 	if err != nil {
 		return nil, err
@@ -129,12 +121,6 @@ func completeExtensionHandshake(conn net.Conn) ([]byte, error) {
 	if err != nil {
 		fmt.Println("Read Extension error:", err.Error())
 	}
-	fmt.Println(h)
 
-	buf := make([]byte, 0)
-	return buf, err
-}
-
-func (c *MetadataClient) GetMetadata() {
-	fmt.Println("TODO: Get metadata")
+	return h, err
 }

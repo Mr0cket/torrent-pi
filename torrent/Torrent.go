@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"torrent-pi/client"
+	"torrent-pi/constants"
 	"torrent-pi/peer"
 )
 
@@ -53,16 +54,12 @@ func NewTorrent(magnetURL *url.URL) (Torrent, error) {
 		Trackers[i] = tracker
 	}
 
-	// Generate peerID
-	baseID := "MwowClient1.0_"
-	peerID := baseID + "123456"
-
 	t := Torrent{
 		Name:     name,
 		Trackers: Trackers,
 		Peers:    make([]peer.Peer, 0),
 	}
-	copy(t.PeerID[:], []byte(peerID))
+	copy(t.PeerID[:], []byte(constants.PEER_ID))
 	copy(t.InfoHash[:], infoHash)
 
 	// TODO Retrieve torrent metadata from the "swarm"... http://www.bittorrent.org/beps/bep_0009.html
@@ -72,12 +69,12 @@ func NewTorrent(magnetURL *url.URL) (Torrent, error) {
 
 	// Retrieve file metadata with metadata extension protocol
 	for _, peer := range peers {
-		client, err := client.NewExtensionClient(peer, t.PeerID, t.InfoHash)
+		client, err := client.NewExtension(peer, t.PeerID, t.InfoHash)
 		if err != nil {
 			fmt.Println("Error connecting to peer", err.Error())
 			continue
 		}
-		client.GetMetadata()
+		client.FetchMetadata()
 		break
 	}
 
