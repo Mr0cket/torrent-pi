@@ -54,20 +54,21 @@ func (h *Handshake) Serialize() *bytes.Reader {
 }
 
 func Read(r io.Reader) (*Handshake, error) {
+	var err error
 	lengthBuf := make([]byte, 1)
-	_, err := io.ReadFull(r, lengthBuf)
-	if err != nil {
+
+	if _, err := io.ReadFull(r, lengthBuf); err != nil {
 		return nil, err
 	}
-	pstrlen := int(lengthBuf[0])
+	pstrlen := int(lengthBuf[0]) // length of protocol string
 	if pstrlen == 0 {
 		err := fmt.Errorf("pstrlen cannot be 0")
 		return nil, err
 	}
 
 	handshakeBuf := make([]byte, 48+pstrlen)
-	_, err = io.ReadFull(r, handshakeBuf)
-	if err != nil {
+
+	if _, err = io.ReadFull(r, handshakeBuf); err != nil {
 		return nil, err
 	}
 	count := pstrlen
@@ -77,7 +78,7 @@ func Read(r io.Reader) (*Handshake, error) {
 	var infoHash, peerID [20]byte
 
 	count += copy(infoHash[:], handshakeBuf[count:count+20])
-	copy(peerID[:], handshakeBuf[count:])
+	copy(peerID[:], handshakeBuf[count:count+20])
 
 	h := Handshake{
 		Pstr:       string(handshakeBuf[0:pstrlen]),

@@ -18,9 +18,10 @@ type Client struct {
 	peer     peer.Peer
 	peerID   [20]byte
 	infoHash [20]byte
+	ExtensionClient
 }
 
-type MetadataClient struct {
+type ExtensionClient struct {
 	handshake.ExtensionHandshake
 	conn net.Conn
 }
@@ -59,8 +60,7 @@ func completeHandshake(conn net.Conn, infohash, peerID [20]byte) (*handshake.Han
 	defer conn.SetDeadline(time.Time{}) // Disable the deadline
 
 	req := handshake.New(infohash, peerID)
-	_, err := io.Copy(conn, req.Serialize())
-	if err != nil {
+	if _, err := io.Copy(conn, req.Serialize()); err != nil {
 		return nil, err
 	}
 
@@ -75,7 +75,7 @@ func completeHandshake(conn net.Conn, infohash, peerID [20]byte) (*handshake.Han
 	return res, nil
 }
 
-func NewExtension(peer peer.Peer, peerID, infoHash [20]byte) (*MetadataClient, error) {
+func NewExtension(peer peer.Peer, peerID, infoHash [20]byte) (*ExtensionClient, error) {
 	fmt.Println("NewExtensionClient")
 	conn, err := net.DialTimeout("tcp", peer.String(), 3*time.Second)
 	if err != nil {
@@ -90,37 +90,94 @@ func NewExtension(peer peer.Peer, peerID, infoHash [20]byte) (*MetadataClient, e
 	}
 	fmt.Println("completed handshake!")
 
-	// TODO check if "Extension protocol" bit is set
-	// Reserved Bit: 44, the fourth most significant bit in the 6th reserved byte i.e. reserved[5] = 0x10
+	// TODO check explicitly if "Extension protocol" bit is set using bitwise operations
+	// Currently only checking if value of byte which contains the bit is atleast 0x10 (16)
+	// This will also pass if any of the first 4 significant bits in the reserved[5] are set
+	// Reserved Bit: 44, the fourth most significant bit in the 6th reserved byte i.e. reserved[5] >= 0x10
 	if h.Extensions[5] < byte(0x10) {
 		conn.Close()
 		return nil, fmt.Errorf("Client doesn't support extension handshake")
 	}
+
+	// The problem: peer can initialise extended handshake, before we send ours
+	// We need to check whether they have already sent us extended handshake before we send ours
+
+	// Check for messages from peer
+	// If we receive a message, we know that peer has already sent us extended handshake
+	// If we don't receive a message, we know that peer hasn't sent us extended handshake
+	// And we can send ours
+
+	// Check whether there are further messages to be read from the connection
+	for msg, err := message.Read(conn); err == nil; msg, err = message.Read(conn) {
+		// Handle the message
+		switch msg.ID {
+		case message.MsgExtended:
+			// They have already sent us extended handshake
+			// We can send ours as a response
+			if msg.ExtID != message.ExtHandshake {
+				conn.Close()
+				return nil, fmt.Errorf("Client doing weird shit")
+			}
+
+			// Client sent us extended handshake
+			h, err := handshake.ReadExtension(msg.ExtendedMessage.Payload)
+			if err != nil {
+				conn.Close()
+				return nil, err
+			}
+			// Store the handshake in state
+			time.Sleep(time.Second * 5)
+			// Send extension handshake to peer
+			req := handshake.NewExtended(6881, h.Extensions)
+			if _, err := io.Copy(conn, req.Serialize()); err != nil {
+				return nil, err
+			}
+			return &ExtensionClient{*h, conn}, err
+		default:
+			fmt.Printf("Message type %v didn't match extended\n", msg.ID)
+		}
+	}
+
 	// Send/recieve extension handshake
-	dict, err := completeExtensionHandshake(conn)
+	dict, err := initiateExtensionHandshake(conn)
 	if err != nil {
 		conn.Close()
 		return nil, err
 	}
 
-	return &MetadataClient{*dict, conn}, err
+	return &ExtensionClient{*dict, conn}, err
 }
 
-func completeExtensionHandshake(conn net.Conn) (*handshake.ExtensionHandshake, error) {
-	fmt.Println("Starting extension handshake...")
+func initiateExtensionHandshake(conn net.Conn) (h *handshake.ExtensionHandshake, err error) {
+	fmt.Println("Initiating extension handshake...")
 	conn.SetDeadline(time.Now().Add(time.Second * 4))
 	defer conn.SetDeadline(time.Time{}) // Disable the deadline
 
 	// Create extension handshake
-	req := handshake.NewExtended(6881)
-	_, err := io.Copy(conn, req.Serialize())
-	if err != nil {
+	req := handshake.NewExtended(6881, message.Map{})
+
+	// Send extension handshake
+	if _, err := io.Copy(conn, req.Serialize()); err != nil {
 		return nil, err
 	}
-	h, err := handshake.ReadExtension(conn)
-	if err != nil {
-		fmt.Println("Read Extension error:", err.Error())
-	}
 
-	return h, err
+	// Read any messages from the connection
+	for msg, err := message.Read(conn); msg.ID != message.MsgExtended; msg, err = message.Read(conn) {
+		if err != nil {
+			conn.Close()
+			return nil, err
+		}
+
+		// Check the message type
+
+		if msg.ExtID != message.ExtHandshake {
+			conn.Close()
+			return nil, fmt.Errorf("Client doing some weird shit")
+		}
+		// Client sent us extended handshake
+
+		// Read the extended handshake
+		h, err = handshake.ReadExtension(msg.Payload)
+	}
+	return
 }

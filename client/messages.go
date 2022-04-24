@@ -1,8 +1,9 @@
 package client
 
 import (
-	"encoding/binary"
 	"fmt"
+	"math"
+	"time"
 	message "torrent-pi/peerMessage"
 )
 
@@ -25,57 +26,45 @@ func (c *Client) SendInterested() error {
 	return err
 }
 
-func (c *MetadataClient) FetchMetadata() []byte {
+func (c *ExtensionClient) FetchMetadata() []byte {
 	fmt.Println("Fetching metadata...")
-	// Metadata pieces are in form of 16 byte chunks
-	metadataPieces := c.Metadata_size / 16
-	fmt.Println("Metadata pieces: ", metadataPieces)
-	buf := make([]byte, c.Metadata_size)
+	var err error
 
-	// size of metadata piece as a fraction (256th) of the total size
-	// e.g size 0 = 1/256 * metdata_size
-	piece_size := 0
+	// Metadata pieces are in form of 16 KB chunks
+	metadataPieces := int(math.Ceil(float64(c.Metadata_size) / float64(message.METADATA_PAYLOAD_SIZE)))
+	fmt.Println("total Metadata pieces:", metadataPieces)
+	// time.Sleep(time.Second * 2)
+	dataBuf := make([]byte, c.Metadata_size)
 
 	// Request the metadata
 	// 1. Send a request for the metadata
-	c.SendRequestMetadata(1, piece_size)
+	for i := 0; i < metadataPieces; i++ {
+		var m = &message.Message{}
+		c.SendRequestMetadata(i)
 
-	// 2. Read the response
-	m, err := message.ReadExtension(c.conn)
-	if err != nil {
-		fmt.Println("Error reading metadata: ", err)
+		// 2. Wait for the response
+		// Throw away all messages until we get a piece
+		for m.ID != message.MsgExtended || m.ExtID != message.ExtMsgID(c.Extensions["ut_metadata"]) {
+			m, err = message.Read(c.conn)
+			if err != nil {
+				fmt.Println("Error: ", err)
+				continue
+			}
+		}
+
+		// 3. Read the response
+		piece, err := message.ParseMetadata(m.ExtendedMessage, c.Extensions)
+		time.Sleep(time.Second * 1)
+		if err != nil {
+			fmt.Println("Error: ", err)
+			// Put the piece back to be picked up by another request
+			continue
+		}
+
+		// 4. Copy the data to the buffer
+		pieceOffset := piece.Piece * message.METADATA_PAYLOAD_SIZE
+		copy(dataBuf[pieceOffset:], piece.Payload)
 	}
-	fmt.Println("Payload: ", m.Payload)
 
-	// 3. Parse the response
-	if m.ID != c.Map["ut_metadata"] {
-		fmt.Printf("Error: Bad extended message ID expected %v to match: %v", m.ID, c.Map["ut_metadata"])
-	}
-	if m.Payload[0] != 1 {
-		fmt.Println("Error: Expected metadata message ID 1")
-	}
-	totalSize := binary.BigEndian.Uint32(m.Payload[1:5])
-
-	fmt.Println("Total metadata size from req:", totalSize)
-
-	offset := binary.BigEndian.Uint32(m.Payload[5:9])
-	fmt.Println("Offset: ", offset)
-
-	// 4. Append the response to the metadata
-	copy(buf[offset:], m.Payload[9:])
-	// 5. Repeat until all pieces are received
-	// }
-	fmt.Println("Got metadata: ", buf)
-	return buf
-}
-
-func (c *MetadataClient) SendRequestMetadata(startBlock, size int) {
-	// append payload headers
-	buf := make([]byte, 3)
-	buf[0] = byte(0)          // metadata message type (0 = request), 1 = response  (not implemented), 2 = reject  (not implemented)
-	buf[1] = byte(startBlock) // the piece index to request
-	buf[2] = byte(size)       // the size of the block to request
-	msg := message.ExtendedMessage{ID: c.Map["ut_metadata"], Payload: buf[:]}
-	// Send the message
-	c.conn.Write(msg.Serialize())
+	return dataBuf
 }

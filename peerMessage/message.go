@@ -36,6 +36,7 @@ const (
 type Message struct {
 	ID      messageID
 	Payload []byte
+	ExtendedMessage
 }
 
 // Serializes a message for Client to send
@@ -67,7 +68,7 @@ func Read(r io.Reader) (*Message, error) {
 		return nil, nil
 	}
 
-	// Read the ID
+	// Read the entire message
 	messageBuf := make([]byte, length)
 	_, err = io.ReadFull(r, messageBuf)
 	if err != nil {
@@ -78,6 +79,16 @@ func Read(r io.Reader) (*Message, error) {
 		ID:      messageID(messageBuf[0]),
 		Payload: messageBuf[1:],
 	}
+
+	// Check if the message is extended
+	if m.ID == MsgExtended {
+		m.ExtendedMessage = ExtendedMessage{
+			ExtID:   ExtMsgID(m.Payload[0]),
+			Payload: m.Payload[1:],
+		}
+	}
+	fmt.Println("Recieved message:", m.TypeString())
+
 	return &m, nil
 }
 
@@ -126,4 +137,31 @@ func ParsePiece(pieceIndex int, buffer []byte, msg *Message) (bytesRead int, err
 	// Copy the payload of the piece into the buffer
 	copy(buffer[pieceIndex:], data)
 	return len(data), err
+}
+
+func (m *Message) TypeString() string {
+	switch m.ID {
+	case MsgChoke:
+		return "choke"
+	case MsgUnchoke:
+		return "unchoke"
+	case MsgInterested:
+		return "interested"
+	case MsgNotInterested:
+		return "not interested"
+	case MsgHave:
+		return "have"
+	case MsgBitfield:
+		return "bitfield"
+	case MsgRequest:
+		return "request"
+	case MsgPiece:
+		return "piece"
+	case MsgCancel:
+		return "cancel"
+	case MsgExtended:
+		return "extended"
+	default:
+		return "unknown"
+	}
 }

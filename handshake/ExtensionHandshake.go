@@ -2,26 +2,35 @@ package handshake
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
-	"io"
 	"torrent-pi/constants"
 	message "torrent-pi/peerMessage"
 
 	"github.com/jackpal/bencode-go"
 )
 
-type ExtensionHandshake struct {
-	Map           map[string]int "m"
-	Port          int            "p"
-	Version       []byte         "v"
-	Metadata_size int            "metadata_size" // in bytes
+// Set our supported extensions and default identifiers
+var supportedExtensions = message.Map{
+	"ut_metadata": 3,
 }
 
-func NewExtended(port int) *ExtensionHandshake {
-	m := make(map[string]int, 1)
-	m["ut_metadata"] = 3
-	return &ExtensionHandshake{Map: m, Port: port, Version: []byte(constants.CLIENT_NAME + constants.VERSION)}
+type ExtensionHandshake struct {
+	Extensions    message.Map `bencode:"m"`
+	Port          int         `bencode:"p"`             // Port to connect to
+	Version       string      `bencode:"v"`             // Verson of the peer's client
+	Metadata_size int         `bencode:"metadata_size"` // in bytes
+	MyIP          []byte      `bencode:"yourip4"`       // My IP (as seen by the other peer)
+	// reqLimit      []int  "reqq"          // Request queue size limit
+}
+
+func NewExtended(port int, extensions message.Map) *ExtensionHandshake {
+	m := supportedExtensions
+	for extension, extensionID := range extensions {
+		if supportedExtensions[extension] > 0 && extensionID > 0 {
+			m[extension] = extensionID
+		}
+	}
+	return &ExtensionHandshake{Extensions: m, Port: port, Version: string(constants.CLIENT_NAME + constants.VERSION)}
 }
 
 /* Extension message Headers:
@@ -32,50 +41,27 @@ uint8_t		extended message ID. 0 = handshake, >0 = extended message as specified 
 */
 func (h *ExtensionHandshake) Serialize() *bytes.Reader {
 	var b bytes.Buffer
-	bencode.Marshal(&b, h)
-
-	buf := make([]byte, 6+b.Len())
-	// uint32_t length prefix. Specifies the number of bytes for the entire message. (Big endian)
-	binary.BigEndian.PutUint32(buf[0:], uint32(6+b.Len()))
-	// uint8_t bittorrent extension message ID = 20
-	buf[4] = byte(message.MsgExtended)
-	// uint8_t extended message ID. 0 = handshake, >0 = extended message as specified by the handshake.
-	buf[5] = byte(0)
-	_, err := b.Read(buf[6:])
-	if err != nil {
-		panic("Bad read of the buffer")
+	if err := bencode.Marshal(&b, *h); err != nil {
+		fmt.Println("Error bencoding Extended handshake:", err)
 	}
 
-	// Add Payload
-	return bytes.NewReader(buf[:])
+	req := message.ExtendedMessage{ExtID: 0, Payload: b.Bytes()}
+	return bytes.NewReader(req.Serialize())
 }
 
-func ReadExtension(r io.Reader) (*ExtensionHandshake, error) {
-	fmt.Println("Extension handshake Response!")
-	headerBuf := make([]byte, 6)
-	_, err := io.ReadFull(r, headerBuf)
-	if err != nil {
-		return nil, err
-	}
-	pstrlen := binary.BigEndian.Uint32(headerBuf[:4])
-	fmt.Println("Packet length:", pstrlen)
-	// Check uint8_t bittorrent message ID == 20
-	messageId := uint8(headerBuf[4])
-	fmt.Println("messageId:", messageId)
-
-	if messageId != uint8(message.MsgExtended) {
-		fmt.Println("bad message Id", messageId)
-	}
-
-	handshakeMsgId := uint8(headerBuf[5])
-	if handshakeMsgId != 0 {
-		fmt.Println("extended message Id does not match 0", handshakeMsgId)
-	}
+func ReadExtension(buf []byte) (*ExtensionHandshake, error) {
+	r := bytes.NewReader(buf)
 	var handshake ExtensionHandshake
-	err = bencode.Unmarshal(r, &handshake)
+	err := bencode.Unmarshal(r, &handshake)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("Extension handshake recieved: ")
+	fmt.Println("Extensions:", handshake.Extensions)
+	fmt.Println("Metadata_size:", handshake.Metadata_size)
+	fmt.Println("Version:", handshake.Version)
+	fmt.Println("Port:", handshake.Port)
+	fmt.Println("MyIP:", handshake.MyIP)
 
 	return &handshake, err
 }

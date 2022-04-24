@@ -29,13 +29,13 @@ func main() {
 func download(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Initiating download")
 
-	torrent, err := torrent.NewTorrent(r.URL)
+	t, err := torrent.NewTorrent(r.URL)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
 		return
 	}
-	go torrent.Download()
+	go t.Download()
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, "Torrent file downloading...")

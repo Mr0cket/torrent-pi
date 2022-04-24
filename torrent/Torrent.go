@@ -1,14 +1,18 @@
 package torrent
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 
 	"torrent-pi/client"
 	"torrent-pi/constants"
 	"torrent-pi/peer"
+
+	"github.com/jackpal/bencode-go"
 )
 
 // MaxBlockSize is the largest number of bytes a request can ask for
@@ -21,14 +25,15 @@ type PeerID [20]byte
 
 type Torrent struct {
 	PeerID      [20]byte
-	InfoHash    [20]byte
-	Name        string
-	Trackers    []*url.URL
+	InfoHash    [20]byte   `bencode:"info_hash"`
+	Name        string     `bencode:"name"`
+	Trackers    []*url.URL `bencode:"announce_list"`
+	PieceHashes [][20]byte `bencode:"pieces"`
+	PieceLength int        `bencode:"piece length"`
+	length      int        `bencode:"length"`
+	Files       Files      `bencode:"files"`
 	Downloaded  uint64
 	Peers       []peer.Peer
-	PieceHashes [][20]byte
-	PieceLength int
-	length      int
 }
 
 const MAX_PORT = 65535
@@ -63,6 +68,8 @@ func NewTorrent(magnetURL *url.URL) (Torrent, error) {
 	copy(t.InfoHash[:], infoHash)
 
 	// TODO Retrieve torrent metadata from the "swarm"... http://www.bittorrent.org/beps/bep_0009.html
+
+	// Fetch peers from first tracker to respond
 	peers := t.AnnounceRace(8081)
 	fmt.Println("Got peers")
 	fmt.Println(peers)
@@ -71,10 +78,19 @@ func NewTorrent(magnetURL *url.URL) (Torrent, error) {
 	for _, peer := range peers {
 		client, err := client.NewExtension(peer, t.PeerID, t.InfoHash)
 		if err != nil {
-			fmt.Println("Error connecting to peer", err.Error())
+			fmt.Println("Error connecting to peer", err)
 			continue
 		}
-		client.FetchMetadata()
+
+		metadata := client.FetchMetadata()
+
+		r := bytes.NewReader(metadata)
+		bencode.Unmarshal(r, &t)
+
+		os.WriteFile("/metadata_files/"+t.Name[:20]+".torrent", metadata, 0644)
+		if err != nil {
+			fmt.Println("Error decoding metadata:", err)
+		}
 		break
 	}
 
@@ -107,7 +123,24 @@ func (t Torrent) Download() {
 	// TODO: Download File
 
 	// Init queues for workers to retrieve work and send results
+	// Write the buffer to file at regular intervals
 
-	// Write buffer to file
+	// NTH: Downloading chunks in order to enable streaming
 
+}
+
+func FromMetadata(metadata []byte) (Torrent, error) {
+	var t Torrent
+
+	r := bytes.NewReader(metadata)
+	if err := bencode.Unmarshal(r, &t); err != nil {
+		fmt.Println("Error decoding metadata:", err)
+		return t, err
+	}
+
+	return t, nil
+}
+
+func (t *Torrent) String() string {
+	return fmt.Sprintf("Torrent: %s\nFiles: \n%sInfoHash: %s\nPieceHashes: %v\nLength:%v\nPieceLength:%v", t.Name, t.Files, t.InfoHash, t.PieceHashes, t.length, t.PieceLength)
 }
