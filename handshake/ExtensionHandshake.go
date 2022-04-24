@@ -11,7 +11,7 @@ import (
 
 // Set our supported extensions and default identifiers
 var supportedExtensions = message.Map{
-	"ut_metadata": 3,
+	"ut_metadata": 2,
 }
 
 type ExtensionHandshake struct {
@@ -19,7 +19,7 @@ type ExtensionHandshake struct {
 	Port          int         `bencode:"p"`             // Port to connect to
 	Version       string      `bencode:"v"`             // Verson of the peer's client
 	Metadata_size int         `bencode:"metadata_size"` // in bytes
-	MyIP          []byte      `bencode:"yourip4"`       // My IP (as seen by the other peer)
+	MyIP          []byte      `bencode:"yourip"`        // My IP (as seen by the other peer)
 	// reqLimit      []int  "reqq"          // Request queue size limit
 }
 

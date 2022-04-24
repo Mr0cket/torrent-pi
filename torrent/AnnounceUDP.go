@@ -108,7 +108,6 @@ func (t *Torrent) announceUDP(tracker url.URL, port uint16) (peers []peer.Peer, 
 		packet = append(packet, URLData...)
 	}
 
-	fmt.Print("Announce packet length:", len(packet))
 	// Send the UDP packet
 	res, err = lib.UDPRequest(tracker.Host, bytes.NewReader(packet))
 	if err != nil {

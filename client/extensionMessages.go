@@ -8,7 +8,7 @@ import (
 	"github.com/jackpal/bencode-go"
 )
 
-func (c *ExtensionClient) SendRequestMetadata(startBlock int) {
+func (c *Client) SendRequestMetadata(startBlock int) {
 	fmt.Println("Requesting metadata piece:", startBlock)
 	var b bytes.Buffer
 	req := message.MetaReq{
@@ -22,5 +22,5 @@ func (c *ExtensionClient) SendRequestMetadata(startBlock int) {
 	msg := message.ExtendedMessage{ExtID: message.ExtMsgID(c.Extensions["ut_metadata"]), Payload: b.Bytes()}
 
 	// Send the message
-	c.conn.Write(msg.Serialize())
+	c.Conn.Write(msg.Serialize())
 }

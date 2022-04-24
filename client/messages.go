@@ -26,7 +26,7 @@ func (c *Client) SendInterested() error {
 	return err
 }
 
-func (c *ExtensionClient) FetchMetadata() []byte {
+func (c *Client) FetchMetadata() []byte {
 	fmt.Println("Fetching metadata...")
 	var err error
 
@@ -45,7 +45,7 @@ func (c *ExtensionClient) FetchMetadata() []byte {
 		// 2. Wait for the response
 		// Throw away all messages until we get a piece
 		for m.ID != message.MsgExtended || m.ExtID != message.ExtMsgID(c.Extensions["ut_metadata"]) {
-			m, err = message.Read(c.conn)
+			m, err = message.Read(c.Conn)
 			if err != nil {
 				fmt.Println("Error: ", err)
 				continue

@@ -76,13 +76,13 @@ func NewTorrent(magnetURL *url.URL) (Torrent, error) {
 
 	// Retrieve file metadata with metadata extension protocol
 	for _, peer := range peers {
-		client, err := client.NewExtension(peer, t.PeerID, t.InfoHash)
+		c, err := client.New(peer, t.PeerID, t.InfoHash)
 		if err != nil {
 			fmt.Println("Error connecting to peer", err)
 			continue
 		}
 
-		metadata := client.FetchMetadata()
+		metadata := c.FetchMetadata()
 
 		r := bytes.NewReader(metadata)
 		bencode.Unmarshal(r, &t)
@@ -125,7 +125,7 @@ func (t Torrent) Download() {
 	// Init queues for workers to retrieve work and send results
 	// Write the buffer to file at regular intervals
 
-	// NTH: Downloading chunks in order to enable streaming
+	// NiceToHave: Downloading chunks in ascending order to enable streaming
 
 }
 
