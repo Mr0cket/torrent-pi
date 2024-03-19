@@ -19,6 +19,7 @@ import (
 )
 
 const PORT int = 8080
+const DOWNLOAD_DIR = "downloads/torrents"
 
 func main() {
 	http.HandleFunc("/download", download)
@@ -29,12 +30,15 @@ func main() {
 func download(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Initiating download")
 
-	t, err := torrent.NewTorrent(r.URL)
+	t, err := torrent.NewTorrentFromMagnet(r.URL)
+	fmt.Println("Received metadata for torrent: ", t.Name)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
 		return
 	}
+	fmt.Printf("Writing .torrent file")
+	t.WriteMetadataFile(DOWNLOAD_DIR)
 	go t.Download()
 
 	w.WriteHeader(http.StatusOK)

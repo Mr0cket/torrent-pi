@@ -12,6 +12,7 @@ type ExtMsgID uint8
 
 type MetadataMsgType uint8
 
+const METADATA_PAYLOAD_SIZE = 1024 * 16
 const (
 	ExtHandshake ExtMsgID        = 0
 	MetaRequest  MetadataMsgType = 0
@@ -25,8 +26,6 @@ type ExtendedMessage struct {
 	ExtID   ExtMsgID
 	Payload []byte
 }
-
-const METADATA_PAYLOAD_SIZE = 1024 * 16
 
 type MetaReq struct {
 	MsgType int `bencode:"msg_type"`
@@ -64,36 +63,36 @@ func (m *ExtendedMessage) Serialize() []byte {
 // specifying an integer value of the number of bytes of the metadata.
 
 func ParseMetadata(msg ExtendedMessage, extensions Map) (MetaDataData, error) {
-	var piece MetaDataData
+	var metadata MetaDataData
 	if int(msg.ExtID) != extensions["ut_metadata"] {
-		return piece, fmt.Errorf("Bad extended message ID. Expected %v got: %v\n", msg.ExtID, extensions["ut_metadata"])
+		return metadata, fmt.Errorf("Bad extended message ID. Expected %v got: %v\n", msg.ExtID, extensions["ut_metadata"])
 	}
 
 	// 1. Parse the metadata response
 	r := bytes.NewReader(msg.Payload[:])
-	if err := bencode.Unmarshal(r, &piece); err != nil {
-		return piece, err
+	if err := bencode.Unmarshal(r, &metadata); err != nil {
+		return metadata, err
 	}
 
 	// 2. Check the message type
-	if piece.MsgType != int(MetaData) {
-		return piece, fmt.Errorf("Bad message type. Expected %v got: %v\n", MetaData, piece.MsgType)
+	if metadata.MsgType != int(MetaData) {
+		return metadata, fmt.Errorf("Bad message type. Expected %v got: %v\n", MetaData, metadata.MsgType)
 	}
 
 	// 3. calculate total metadata pieces
-	totalPieces := int(math.Ceil(float64(piece.Size) / float64(METADATA_PAYLOAD_SIZE)))
+	totalPieces := int(math.Ceil(float64(metadata.Size) / float64(METADATA_PAYLOAD_SIZE)))
 
 	// 4. Calculate the payload offset (room for improvement??)
 	var payloadOffset int
-	if piece.Piece < totalPieces-1 {
+	if metadata.Piece < totalPieces-1 {
 		payloadOffset = len(msg.Payload) - METADATA_PAYLOAD_SIZE
 	} else {
-		payloadOffset = len(msg.Payload) - (piece.Size % METADATA_PAYLOAD_SIZE)
+		payloadOffset = len(msg.Payload) - (metadata.Size % METADATA_PAYLOAD_SIZE)
 	}
 
 	// 5. Read the rest of the msg payload & copy into piece payload
-	piece.Payload = make([]byte, METADATA_PAYLOAD_SIZE) // 16KB
-	copy(piece.Payload[:], msg.Payload[payloadOffset:])
+	metadata.Payload = make([]byte, METADATA_PAYLOAD_SIZE) // 16KB
+	copy(metadata.Payload[:], msg.Payload[payloadOffset:])
 
-	return piece, nil
+	return metadata, nil
 }

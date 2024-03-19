@@ -46,11 +46,11 @@ func (t *Torrent) announceUDP(tracker url.URL, port uint16) (peers []peer.Peer, 
 	connectionID := binary.BigEndian.Uint64(res[8:16])
 
 	if res_action != 0 {
-		return peers, fmt.Errorf("Error: action not 0")
+		return peers, fmt.Errorf("action not 0")
 	}
 
 	if res_transactionID != transactionID {
-		return peers, fmt.Errorf("Error: transaction ID not equal")
+		return peers, fmt.Errorf("transaction ID not equal")
 	}
 
 	fmt.Println("Successfully connected to UDP tracker")
@@ -111,8 +111,7 @@ func (t *Torrent) announceUDP(tracker url.URL, port uint16) (peers []peer.Peer, 
 	// Send the UDP packet
 	res, err = lib.UDPRequest(tracker.Host, bytes.NewReader(packet))
 	if err != nil {
-		fmt.Println("Error reading UDP tracker:", err)
-		return
+		return peers, fmt.Errorf("error reading UDP tracker: %s", err)
 	}
 
 	// Verify & parse the response
@@ -123,10 +122,10 @@ func (t *Torrent) announceUDP(tracker url.URL, port uint16) (peers []peer.Peer, 
 	seeders := binary.BigEndian.Uint32(res[16:20])
 
 	if res_action != 1 {
-		return peers, fmt.Errorf("Error: action not Announce")
+		return peers, fmt.Errorf("action not Announce")
 	}
 	if res_transactionID != transactionID {
-		return peers, fmt.Errorf("Error: transaction ID not equal")
+		return peers, fmt.Errorf("transaction ID not equal")
 	}
 
 	peers = make([]peer.Peer, leechers+seeders)

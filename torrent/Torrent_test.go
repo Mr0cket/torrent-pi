@@ -8,7 +8,7 @@ import (
 
 func TestFromMetadata(t *testing.T) {
 	path, err := os.Getwd()
-	data, err := os.ReadFile(path + "/../metadata_files/test.torrent")
+	data, err := os.ReadFile(path + "../metadata_files/test.torrent")
 	if err != nil {
 		t.Error(err)
 	}

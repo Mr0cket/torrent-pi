@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 
 	"torrent-pi/client"
@@ -38,11 +39,10 @@ type Torrent struct {
 
 const MAX_PORT = 65535
 
-// Construct Torrent from magnet URL
-func NewTorrent(magnetURL *url.URL) (Torrent, error) {
+// Construct a Torrent from magnet URL
+func NewTorrentFromMagnet(magnetURL *url.URL) (Torrent, error) {
 	var err error
 
-	// Parse the magnet link
 	var trackers = magnetURL.Query()["tr"]
 	var name = magnetURL.Query().Get("dn")
 	var infoHash_hex = strings.TrimPrefix(magnetURL.Query().Get("xt"), "urn:btih:")
@@ -86,11 +86,6 @@ func NewTorrent(magnetURL *url.URL) (Torrent, error) {
 
 		r := bytes.NewReader(metadata)
 		bencode.Unmarshal(r, &t)
-
-		os.WriteFile("/metadata_files/"+t.Name[:20]+".torrent", metadata, 0644)
-		if err != nil {
-			fmt.Println("Error decoding metadata:", err)
-		}
 		break
 	}
 
@@ -100,7 +95,7 @@ func NewTorrent(magnetURL *url.URL) (Torrent, error) {
 /* Torrent Methods */
 func (t Torrent) Download() {
 	fmt.Println("Downloading", t.Name)
-	// // Announce to all trackers
+	// Announce to all trackers
 	var port uint16 = 6881
 	peers := t.AnnounceAll(port)
 
@@ -139,6 +134,13 @@ func FromMetadata(metadata []byte) (Torrent, error) {
 	}
 
 	return t, nil
+}
+
+func (t Torrent) WriteMetadataFile(dir string) error {
+	filename := path.Join(dir, t.Name+".torrent")
+	f, err := os.Create(filename)
+	bencode.Marshal(f, t)
+	return err
 }
 
 func (t *Torrent) String() string {
