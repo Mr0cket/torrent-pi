@@ -9,9 +9,9 @@ import (
 	"path"
 	"strings"
 
-	"torrent-pi/client"
-	"torrent-pi/constants"
-	"torrent-pi/peer"
+	"torrent-pi/internal/client"
+	"torrent-pi/internal/constants"
+	"torrent-pi/internal/peer"
 
 	"github.com/jackpal/bencode-go"
 )

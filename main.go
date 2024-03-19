@@ -15,7 +15,7 @@ import (
 	"log"
 	"net/http"
 
-	torrent "torrent-pi/torrent"
+	torrent "torrent-pi/internal/torrent"
 )
 
 const PORT int = 8080

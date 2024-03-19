@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"sync"
-	"torrent-pi/peer"
+	"torrent-pi/internal/peer"
 )
 
 // Announce to all trackers

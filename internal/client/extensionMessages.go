@@ -3,7 +3,7 @@ package client
 import (
 	"bytes"
 	"fmt"
-	message "torrent-pi/peerMessage"
+	message "torrent-pi/internal/peerMessage"
 
 	"github.com/jackpal/bencode-go"
 )

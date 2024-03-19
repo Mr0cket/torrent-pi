@@ -7,9 +7,9 @@ import (
 	"net"
 	"time"
 
-	"torrent-pi/handshake"
-	"torrent-pi/peer"
-	message "torrent-pi/peerMessage"
+	"torrent-pi/internal/handshake"
+	"torrent-pi/internal/peer"
+	message "torrent-pi/internal/peerMessage"
 )
 
 type ReservedBits [8]byte

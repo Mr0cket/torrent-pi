@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 	"time"
-	message "torrent-pi/peerMessage"
+	message "torrent-pi/internal/peerMessage"
 )
 
 func (c *Client) SendRequest(pieceIndex, beginByte, length int) error {

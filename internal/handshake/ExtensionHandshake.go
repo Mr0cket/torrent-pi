@@ -3,8 +3,8 @@ package handshake
 import (
 	"bytes"
 	"fmt"
-	"torrent-pi/constants"
-	message "torrent-pi/peerMessage"
+	"torrent-pi/internal/constants"
+	message "torrent-pi/internal/peerMessage"
 
 	"github.com/jackpal/bencode-go"
 )
@@ -33,7 +33,9 @@ func NewExtended(port int, extensions message.Map) *ExtensionHandshake {
 	return &ExtensionHandshake{Extensions: m, Port: port, Version: string(constants.CLIENT_NAME + constants.VERSION)}
 }
 
-/* Extension message Headers:
+/*
+	Extension message Headers:
+
 size			description
 uint32_t	length prefix. Specifies the number of bytes for the entire message. (big-endian)
 uint8_t		bittorrent message ID, = 20

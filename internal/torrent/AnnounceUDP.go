@@ -7,8 +7,8 @@ import (
 	"math/rand"
 	"net"
 	"net/url"
-	"torrent-pi/lib"
-	"torrent-pi/peer"
+	"torrent-pi/internal/lib"
+	"torrent-pi/internal/peer"
 )
 
 // Implement announce UDP request

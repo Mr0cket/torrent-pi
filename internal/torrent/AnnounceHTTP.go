@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"torrent-pi/peer"
+	"torrent-pi/internal/peer"
 
 	"github.com/jackpal/bencode-go"
 )

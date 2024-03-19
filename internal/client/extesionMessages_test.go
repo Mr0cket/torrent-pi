@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
-	message "torrent-pi/peerMessage"
+	message "torrent-pi/internal/peerMessage"
 
 	"github.com/jackpal/bencode-go"
 )
