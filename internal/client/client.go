@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -11,8 +12,6 @@ import (
 	"torrent-pi/internal/peer"
 	message "torrent-pi/internal/peerMessage"
 )
-
-type ReservedBits [8]byte
 
 type Client struct {
 	Conn     net.Conn
@@ -47,13 +46,23 @@ func New(peer peer.Peer, peerID, infoHash [20]byte) (*Client, error) {
 	}
 
 	// Check whether Reserved Bit: 44 (DHT) is set
-	if c.Reserved.Has(44) {
-		// Client supports extension protocol
-		extHandshake, err := completeExtensionHandshake(c.Conn)
-		if err == nil {
-			c.ExtensionHandshake = *extHandshake
-		}
+	fmt.Println("client reservedBits", c.Reserved.String())
+	if !c.Reserved.Has(44) {
+		return nil, errors.New("doesn't support extension bit")
+	} else {
+		fmt.Println("Client supports extension bit")
 	}
+
+	// Client supports extension protocol
+	fmt.Println("Starting completeExtensionHandshake")
+	extHandshake, err := completeExtensionHandshake(c.Conn)
+
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println("Finished completeExtensionHandshake")
+	c.ExtensionHandshake = *extHandshake
+
 	return c, nil
 
 }
@@ -76,11 +85,13 @@ func completeHandshake(conn net.Conn, infohash, peerID [20]byte) (*handshake.Han
 
 	res, err := handshake.Read(conn)
 	if err != nil {
+		fmt.Println("Error reading handshake to conn", err)
 		return nil, err
 	}
+	fmt.Println("Read handshake to conn", conn.RemoteAddr())
 
 	if !bytes.Equal(res.InfoHash[:], infohash[:]) {
-		return nil, fmt.Errorf("Expected infohash %x but got %x", res.InfoHash, infohash)
+		return nil, fmt.Errorf("expected infohash %x but got %x", res.InfoHash, infohash)
 	}
 	return res, nil
 }
@@ -143,12 +154,9 @@ func initateExtensionHandshake(conn net.Conn) (h *handshake.ExtensionHandshake, 
 
 		// Read the extended handshake
 		h, err = handshake.ReadExtension(msg.Payload)
+		if err != nil {
+			fmt.Println("Extension handshake failed to read extension msg")
+		}
 	}
 	return
-}
-
-func (r *ReservedBits) Has(bit int) bool {
-	byteIndex := bit / 8 // Automatically truncated because bit is an int
-	bitIndex := byte(bit % 8)
-	return r[byteIndex]&bitIndex != 0
 }

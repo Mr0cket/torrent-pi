@@ -28,3 +28,19 @@ func HandleHTTPError(err error) bool {
 	}
 	return false
 }
+
+// Splits a string into array of byte arrays
+func SplitStringToBytes(str string, splitSize int) [][]byte {
+	byteSubStrings := [][]byte{}
+	if len(str)%splitSize > 0 {
+		fmt.Printf("WARNING: string is not mutiple of split size %d\n", splitSize)
+	}
+	for i := 0; i < len(str); i += splitSize {
+		end := i + splitSize
+		if end > len(str) {
+			end = len(str)
+		}
+		byteSubStrings = append(byteSubStrings, []byte(str[i:end]))
+	}
+	return byteSubStrings
+}

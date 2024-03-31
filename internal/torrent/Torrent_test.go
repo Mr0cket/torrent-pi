@@ -7,8 +7,8 @@ import (
 )
 
 func TestFromMetadata(t *testing.T) {
-	path, err := os.Getwd()
-	data, err := os.ReadFile(path + "../metadata_files/test.torrent")
+	path, _ := os.Getwd()
+	data, err := os.ReadFile(path + "/../../samples/lord_of_the_rings.torrent")
 	if err != nil {
 		t.Error(err)
 	}
@@ -17,5 +17,10 @@ func TestFromMetadata(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	if torrent.Name == "" {
+		t.Error("No Torrent name")
+	}
+
+	fmt.Println("Torrent name:", torrent.Name)
 	fmt.Println(torrent.String())
 }

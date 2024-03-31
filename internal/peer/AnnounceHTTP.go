@@ -1,4 +1,4 @@
-package torrent
+package peer
 
 import (
 	"fmt"
@@ -6,8 +6,6 @@ import (
 	"net/url"
 	"strconv"
 	"time"
-
-	"torrent-pi/internal/peer"
 
 	"github.com/jackpal/bencode-go"
 )
@@ -22,9 +20,9 @@ type HTTPTrackerResponse struct {
 	peers      []byte
 }
 
-func (t *Torrent) announceHTTP(tracker *url.URL, port uint16) (peers []peer.Peer, err error) {
+func (pm *PeerManager) announceHTTP(tracker *url.URL, port uint16) (peers []Peer, err error) {
 	// Build the tracker URL
-	trackerURL, err := t.buildTrackerURL(tracker, port)
+	trackerURL, err := pm.buildTrackerURL(tracker, port)
 	if err != nil {
 		fmt.Println("Error building tracker URL:", err)
 		return
@@ -42,14 +40,14 @@ func (t *Torrent) announceHTTP(tracker *url.URL, port uint16) (peers []peer.Peer
 	data := HTTPTrackerResponse{}
 	err = bencode.Unmarshal(res.Body, &data)
 	// Unmarshall the peers
-	peers, err = peer.Unmarshal(data.peers)
+	peers, err = Unmarshal(data.peers)
 	return
 }
 
-func (t *Torrent) buildTrackerURL(trackerURL *url.URL, port uint16) (string, error) {
+func (pm *PeerManager) buildTrackerURL(trackerURL *url.URL, port uint16) (string, error) {
 	params := url.Values{
-		"info_hash":  []string{string(t.InfoHash[:])},
-		"peer_id":    []string{string(t.PeerID[:])},
+		"info_hash":  []string{string(pm.InfoHash[:])},
+		"peer_id":    []string{string(pm.PeerID[:])},
 		"port":       []string{strconv.Itoa(int(port))},
 		"uploaded":   []string{"0"},
 		"downloaded": []string{"0"},

@@ -1,4 +1,4 @@
-package torrent
+package peer
 
 import (
 	"bytes"
@@ -8,11 +8,11 @@ import (
 	"net"
 	"net/url"
 	"torrent-pi/internal/lib"
-	"torrent-pi/internal/peer"
 )
 
 // Implement announce UDP request
-func (t *Torrent) announceUDP(tracker url.URL, port uint16) (peers []peer.Peer, err error) {
+func (pm *PeerManager) announceUDP(tracker url.URL, port uint16) (peers []Peer, err error) {
+	t_stats := TorrentStats{}
 
 	// Implement UDP client that sends a UDP packet to the tracker
 	// and waits for a response.
@@ -67,13 +67,13 @@ func (t *Torrent) announceUDP(tracker url.URL, port uint16) (peers []peer.Peer, 
 	// transactionID
 	binary.BigEndian.PutUint32(packet[12:16], transactionID)
 	// info hash
-	copy(packet[16:36], t.InfoHash[:])
+	copy(packet[16:36], pm.InfoHash[:])
 	// peer id
-	copy(packet[36:56], t.PeerID[:])
+	copy(packet[36:56], pm.PeerID[:])
 	// downloaded
-	binary.BigEndian.PutUint64(packet[56:64], t.Downloaded)
+	binary.BigEndian.PutUint64(packet[56:64], t_stats.Downloaded)
 	// left
-	binary.BigEndian.PutUint64(packet[64:72], ^uint64(0))
+	binary.BigEndian.PutUint64(packet[64:72], t_stats.Uploaded)
 	// uploaded
 	binary.BigEndian.PutUint64(packet[72:80], 0)
 	// event
@@ -128,7 +128,7 @@ func (t *Torrent) announceUDP(tracker url.URL, port uint16) (peers []peer.Peer, 
 		return peers, fmt.Errorf("transaction ID not equal")
 	}
 
-	peers = make([]peer.Peer, leechers+seeders)
+	peers = make([]Peer, leechers+seeders)
 	fmt.Println("Interval", interval)
 	fmt.Println("Leechers:", leechers)
 	fmt.Println("Seeders:", seeders)
@@ -139,6 +139,5 @@ func (t *Torrent) announceUDP(tracker url.URL, port uint16) (peers []peer.Peer, 
 		peers[i].IP = net.IPv4(res[startIP], res[startIP+1], res[startIP+2], res[startIP+3])
 		peers[i].Port = binary.BigEndian.Uint16(res[startIP+4 : startIP+6])
 	}
-	fmt.Println("Peers:", peers)
-	return
+	return peers, nil
 }

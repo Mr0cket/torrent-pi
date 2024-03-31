@@ -17,7 +17,7 @@ func Unmarshal(peersBin []byte) ([]Peer, error) {
 	const peerSize = 6 // 4 for IP, 2 for port
 	numPeers := len(peersBin) / peerSize
 	if len(peersBin)%peerSize != 0 {
-		err := fmt.Errorf("Received malformed peers")
+		err := fmt.Errorf("received malformed peers")
 		return nil, err
 	}
 	peers := make([]Peer, numPeers)
@@ -31,16 +31,4 @@ func Unmarshal(peersBin []byte) ([]Peer, error) {
 
 func (p Peer) String() string {
 	return p.IP.String() + ":" + strconv.Itoa(int(p.Port))
-}
-
-func RemoveDuplicates(arr []Peer) []Peer {
-	keys := make(map[string]bool)
-	var uniques []Peer
-	for _, peer := range arr {
-		if _, value := keys[peer.String()]; !value {
-			keys[peer.String()] = true
-			uniques = append(uniques, peer)
-		}
-	}
-	return uniques
 }

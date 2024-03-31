@@ -39,6 +39,8 @@ func download(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Printf("Writing .torrent file")
 	t.WriteMetadataFile(DOWNLOAD_DIR)
+
+	// Download in goroutine (non-blocking)
 	go t.Download()
 
 	w.WriteHeader(http.StatusOK)

@@ -39,6 +39,8 @@ type Message struct {
 	ExtendedMessage
 }
 
+type Bitfield []byte
+
 // Serializes a message for Client to send
 func (m *Message) Serialize() []byte {
 	if m == nil {
@@ -92,7 +94,7 @@ func Read(r io.Reader) (*Message, error) {
 	return &m, nil
 }
 
-func FormatRequest(pieceIndex, beginByte, length int) *Message {
+func FormatRequest(pieceIndex, beginByte, length uint) *Message {
 	payload := make([]byte, 12)
 	binary.BigEndian.PutUint32(payload[0:4], uint32(pieceIndex))
 	binary.BigEndian.PutUint32(payload[4:8], uint32(beginByte))
@@ -103,40 +105,56 @@ func FormatRequest(pieceIndex, beginByte, length int) *Message {
 // ParseHave parses a HAVE message
 func ParseHave(msg *Message) (int, error) {
 	if msg.ID != MsgHave {
-		return 0, fmt.Errorf("Expected HAVE (ID %d), got ID %d", MsgHave, msg.ID)
+		return 0, fmt.Errorf("expected HAVE (ID %d), got ID %d", MsgHave, msg.ID)
 	}
 	if len(msg.Payload) != 4 {
-		return 0, fmt.Errorf("Expected payload length 4, got length %d", len(msg.Payload))
+		return 0, fmt.Errorf("expected payload length 4, got length %d", len(msg.Payload))
 	}
 	index := int(binary.BigEndian.Uint32(msg.Payload))
 	return index, nil
 }
 
-func ParsePiece(pieceIndex int, buffer []byte, msg *Message) (bytesRead int, err error) {
+func ParsePiece(pieceIndex int, pieceBuffer []byte, msg *Message) (bytesRead int, err error) {
 	if msg.ID != MsgPiece {
-		return 0, fmt.Errorf("Expected PIECE (ID %d), got ID %d", MsgPiece, msg.ID)
+		return 0, fmt.Errorf("expected PIECE (ID %d), got ID %d", MsgPiece, msg.ID)
 	}
 	if len(msg.Payload) < 8 {
-		return 0, fmt.Errorf("Payload too short. %d < 8", len(msg.Payload))
+		return 0, fmt.Errorf("payload too short. %d < 8", len(msg.Payload))
 	}
 
 	parsedIndex := int(binary.BigEndian.Uint32(msg.Payload[0:4]))
 	if parsedIndex != pieceIndex {
-		return 0, fmt.Errorf("Expected pieceIndex %d, got %d", pieceIndex, parsedIndex)
+		return 0, fmt.Errorf("expected pieceIndex %d, got %d", pieceIndex, parsedIndex)
 	}
 
 	begin := int(binary.BigEndian.Uint32(msg.Payload[4:8]))
-	if begin >= len(buffer) {
-		return 0, fmt.Errorf("Begin offset too high. %d >= %d", begin, len(buffer))
+	if begin >= len(pieceBuffer) {
+		return 0, fmt.Errorf("begin offset too high. %d >= %d", begin, len(pieceBuffer))
 	}
 	data := msg.Payload[8:]
-	if begin+len(data) > len(buffer) {
-		return 0, fmt.Errorf("Data too long [%d] for offset %d with length %d", len(data), begin, len(buffer))
+	if begin+len(data) > len(pieceBuffer) {
+		return 0, fmt.Errorf("data too long [%d] for offset %d with length %d", len(data), begin, len(pieceBuffer))
 	}
 
 	// Copy the payload of the piece into the buffer
-	copy(buffer[pieceIndex:], data)
+	copy(pieceBuffer[begin:], data)
 	return len(data), err
+}
+
+// Bitfield with each piece/index the sender has downloaded.
+// if bit x is set -> piece index x is downloaded
+// Spare bits at the end are set to zero (padding)
+// Should be stored with the peer to determine which pieces to request from the peer
+func ParseBitfield(msg *Message) Bitfield {
+	return msg.Payload
+}
+
+func (b Bitfield) HasPiece(pieceIndex int) bool {
+	// Find the byte index
+	byteIndex := pieceIndex / 8
+	bitIndex := pieceIndex % 8
+
+	return b[byteIndex]&(1<<bitIndex) != 0
 }
 
 func (m *Message) TypeString() string {

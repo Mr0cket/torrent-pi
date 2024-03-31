@@ -1,4 +1,4 @@
-package client
+package message_test
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ type MetaDataData struct {
 	Size    int `bencode:"total_size"`
 }
 
-func TestSendRequestMetadata(t *testing.T) {
+func TestFormatMetadata(t *testing.T) {
 	var b bytes.Buffer
 	req := MetaDataData{
 		MsgType: int(message.MetaRequest),

@@ -65,7 +65,7 @@ func (m *ExtendedMessage) Serialize() []byte {
 func ParseMetadata(msg ExtendedMessage, extensions Map) (MetaDataData, error) {
 	var metadata MetaDataData
 	if int(msg.ExtID) != extensions["ut_metadata"] {
-		return metadata, fmt.Errorf("Bad extended message ID. Expected %v got: %v\n", msg.ExtID, extensions["ut_metadata"])
+		return metadata, fmt.Errorf("bad extended message ID. Expected %v got: %v", msg.ExtID, extensions["ut_metadata"])
 	}
 
 	// 1. Parse the metadata response
@@ -76,7 +76,7 @@ func ParseMetadata(msg ExtendedMessage, extensions Map) (MetaDataData, error) {
 
 	// 2. Check the message type
 	if metadata.MsgType != int(MetaData) {
-		return metadata, fmt.Errorf("Bad message type. Expected %v got: %v\n", MetaData, metadata.MsgType)
+		return metadata, fmt.Errorf("bad message type. Expected %v got: %v", MetaData, metadata.MsgType)
 	}
 
 	// 3. calculate total metadata pieces
@@ -95,4 +95,17 @@ func ParseMetadata(msg ExtendedMessage, extensions Map) (MetaDataData, error) {
 	copy(metadata.Payload[:], msg.Payload[payloadOffset:])
 
 	return metadata, nil
+}
+
+func FormatRequestMetadata(extensionId, startBlock int) ExtendedMessage {
+	var b bytes.Buffer
+	req := MetaReq{
+		MsgType: int(MetaRequest),
+		Piece:   startBlock,
+	}
+	if err := bencode.Marshal(&b, req); err != nil {
+		fmt.Println("bencode error: ", err)
+	}
+
+	return ExtendedMessage{ExtID: ExtMsgID(extensionId), Payload: b.Bytes()}
 }
