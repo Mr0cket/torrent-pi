@@ -180,10 +180,12 @@ func (c Client) DownloadPiece(pieceBuffer []byte, pieceIndex, blockCount uint) e
 
 			// Throw away all messages until we get a piece
 			c.SendRequest(pieceIndex, startByte, constants.BLOCK_SIZE)
+			if msg == nil {
+				msg = &message.Message{}
+			}
 			for msg.ID != message.MsgPiece {
 				msg, err = c.Read()
 				if err != nil {
-					msg = &message.Message{}
 					errorCount++
 					if errorCount > 3 {
 						return err
