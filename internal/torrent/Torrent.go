@@ -202,7 +202,7 @@ func (t Torrent) Download() {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	fileLock := sync.Mutex{}
-	f, err := os.OpenFile(string(fileToDownload.Path[0]), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	f, err := os.OpenFile("downloads/"+string(fileToDownload.Path[0]), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
 		fmt.Println("Error opening file", fileToDownload.Path[0], err)
 	}
@@ -229,6 +229,7 @@ func (t Torrent) Download() {
 			}
 			wg.Add(1)
 			go func(peerIp net.IP) {
+				defer c.Conn.Close()
 				defer wg.Done()
 
 				for !piecesQueue.IsEmpty() {

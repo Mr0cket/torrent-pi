@@ -72,7 +72,7 @@ func New(peer peer.Peer, peerID, infoHash [20]byte) (*Client, error) {
 // Read reads and consumes a message from the connection
 func (c *Client) Read() (*message.Message, error) {
 	msg, err := message.Read(c.Conn)
-	if err == nil {
+	if err == nil && msg != nil {
 		fmt.Println(c.peer.IP, "->", msg.TypeString())
 	}
 	return msg, err
@@ -171,12 +171,12 @@ func initateExtensionHandshake(conn net.Conn) (h *handshake.ExtensionHandshake, 
 // Download a full piece by sending consecutive requests for blocks which make up that piece
 func (c Client) DownloadPiece(pieceBuffer []byte, pieceIndex, blockCount uint) error {
 	errorCount := 0
-	var msg = &message.Message{}
 	var err error
 	for blockIndex := range make([]int, blockCount) {
+		var msg = &message.Message{}
 		startByte := uint(blockIndex) * constants.BLOCK_SIZE
 		for {
-			// fmt.Printf("Piece #%d block #%d -> %v\n", pieceIndex, blockIndex, peerIp)
+			// fmt.Printf("Piece #%d block #%d -> %v\n", pieceIndex, blockIndex, c.peer.IP)
 
 			// Throw away all messages until we get a piece
 			c.SendRequest(pieceIndex, startByte, constants.BLOCK_SIZE)
