@@ -81,11 +81,7 @@ func (pm PeerManager) AddPeers(peers []Peer) {
 		if _, ok := pm.peers[peer.IP.String()]; ok || peer.IP == nil {
 			continue
 		}
-		pm.peers[peer.IP.String()] = PeerState{peer: peer, conns: 0}
-	}
-	// Remove any nil keys
-	for key := range pm.peers {
-		fmt.Println("Peer key", key)
+		pm.peers[peer.IP.String()] = PeerState{peer: peer}
 	}
 }
 
@@ -128,7 +124,7 @@ func (pm PeerManager) Start(port uint16) {
 	// TODO announce to tracker at regular intervals, following the value of 'interval' in response
 }
 
-// Wait until the peermanager has found at least 1 peer before proceeding with execution
+// Wait until the peerManager has found at least 1 peer before proceeding with execution
 func (pm PeerManager) WaitReady() {
 
 	// Wait for the mutex to become unlocked

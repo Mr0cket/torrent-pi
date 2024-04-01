@@ -8,6 +8,7 @@ import (
 	"net"
 	"time"
 
+	"torrent-pi/internal/constants"
 	"torrent-pi/internal/handshake"
 	"torrent-pi/internal/peer"
 	message "torrent-pi/internal/peerMessage"
@@ -20,6 +21,7 @@ type Client struct {
 	peerID   [20]byte
 	infoHash [20]byte
 	Reserved ReservedBits
+	Bitfield message.Bitfield
 	handshake.ExtensionHandshake
 }
 
@@ -70,6 +72,9 @@ func New(peer peer.Peer, peerID, infoHash [20]byte) (*Client, error) {
 // Read reads and consumes a message from the connection
 func (c *Client) Read() (*message.Message, error) {
 	msg, err := message.Read(c.Conn)
+	if err == nil {
+		fmt.Println(c.peer.IP, "->", msg.TypeString())
+	}
 	return msg, err
 }
 
@@ -99,6 +104,7 @@ func completeHandshake(conn net.Conn, infohash, peerID [20]byte) (*handshake.Han
 func completeExtensionHandshake(conn net.Conn) (h *handshake.ExtensionHandshake, err error) {
 	// Check whether there are further messages to be read from the connection
 	for msg, err := message.Read(conn); err == nil; msg, err = message.Read(conn) {
+		fmt.Println("Recieved message:", msg.TypeString())
 		// Handle the message
 		if msg.ID == message.MsgExtended {
 			// They have initiated extended handshake
@@ -143,6 +149,7 @@ func initateExtensionHandshake(conn net.Conn) (h *handshake.ExtensionHandshake, 
 			conn.Close()
 			return nil, err
 		}
+		fmt.Println("Recieved message:", msg.TypeString())
 
 		// Check the message type
 
@@ -159,4 +166,41 @@ func initateExtensionHandshake(conn net.Conn) (h *handshake.ExtensionHandshake, 
 		}
 	}
 	return
+}
+
+// Download a full piece by sending consecutive requests for blocks which make up that piece
+func (c Client) DownloadPiece(pieceBuffer []byte, pieceIndex, blockCount uint) error {
+	errorCount := 0
+	var msg = &message.Message{}
+	var err error
+	for blockIndex := range make([]int, blockCount) {
+		startByte := uint(blockIndex) * constants.BLOCK_SIZE
+		for {
+			// fmt.Printf("Piece #%d block #%d -> %v\n", pieceIndex, blockIndex, peerIp)
+
+			// Throw away all messages until we get a piece
+			c.SendRequest(pieceIndex, startByte, constants.BLOCK_SIZE)
+			for msg.ID != message.MsgPiece {
+				msg, err = c.Read()
+				if err != nil {
+					msg = &message.Message{}
+					errorCount++
+					if errorCount > 3 {
+						return err
+					}
+					fmt.Println("Error: ", err)
+					break
+				}
+			}
+			if msg.ID == message.MsgPiece {
+				_, err := message.ParsePiece(int(pieceIndex), pieceBuffer, msg)
+				if err != nil {
+					fmt.Println("Buffer error", err)
+					return err
+				}
+				break
+			}
+		}
+	}
+	return nil
 }

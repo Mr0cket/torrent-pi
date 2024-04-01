@@ -20,7 +20,7 @@ type HTTPTrackerResponse struct {
 	peers      []byte
 }
 
-func (pm *PeerManager) announceHTTP(tracker *url.URL, port uint16) (peers []Peer, err error) {
+func (pm *PeerManager) announceHTTP(tracker url.URL, port uint16) (peers []Peer, err error) {
 	// Build the tracker URL
 	trackerURL, err := pm.buildTrackerURL(tracker, port)
 	if err != nil {
@@ -44,7 +44,7 @@ func (pm *PeerManager) announceHTTP(tracker *url.URL, port uint16) (peers []Peer
 	return
 }
 
-func (pm *PeerManager) buildTrackerURL(trackerURL *url.URL, port uint16) (string, error) {
+func (pm *PeerManager) buildTrackerURL(trackerURL url.URL, port uint16) (string, error) {
 	params := url.Values{
 		"info_hash":  []string{string(pm.InfoHash[:])},
 		"peer_id":    []string{string(pm.PeerID[:])},

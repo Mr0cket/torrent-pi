@@ -89,7 +89,6 @@ func Read(r io.Reader) (*Message, error) {
 			Payload: m.Payload[1:],
 		}
 	}
-	fmt.Println("Recieved message:", m.TypeString())
 
 	return &m, nil
 }
@@ -178,6 +177,7 @@ func (m *Message) TypeString() string {
 	case MsgCancel:
 		return "cancel"
 	case MsgExtended:
+
 		return "extended"
 	default:
 		return "unknown"

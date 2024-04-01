@@ -2,18 +2,21 @@ package torrent
 
 import (
 	"bytes"
+	"container/heap"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
 	"net"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 	"sync"
 	"time"
 
 	"torrent-pi/internal/client"
 	"torrent-pi/internal/constants"
+	"torrent-pi/internal/lib"
 	"torrent-pi/internal/peer"
 	message "torrent-pi/internal/peerMessage"
 	"torrent-pi/internal/utils"
@@ -32,18 +35,30 @@ type PeerID [20]byte
 // There is a key 'length' or a key 'files', but not both or neither.
 // If length is present then the download represents a single file
 // otherwise it represents a set of files which go in a directory structure.
+
+type Trackers []*url.URL
+
+func (t Trackers) String() []string {
+	strs := make([]string, len(t))
+
+	for _, tracker := range t {
+		strs = append(strs, tracker.String())
+	}
+	return strs
+}
+
 type Torrent struct {
-	PeerID   [20]byte   `bencode:"-"`
-	InfoHash [20]byte   `bencode:"info_hash"`
-	Name     string     `bencode:"name"`
-	Trackers []*url.URL `bencode:"announce_list"`
+	PeerID   [20]byte `bencode:"-"`
+	InfoHash [20]byte `bencode:"info_hash"`
+	Name     string   `bencode:"name"`
+	Trackers Trackers `bencode:"announce_list"`
 
 	// pieces maps to a string whose length is a multiple of 20.
 	// It is to be subdivided into strings of length 20, each of which is the SHA1 hash of the piece at the corresponding index.
-	PieceHashesString string `bencode:"pieces"`
-	PieceHashes       [][]byte
-	PieceLength       uint `bencode:"piece length"`
-	Length            uint `bencode:"length"`
+	PieceHashesString string   `bencode:"pieces"`
+	PieceHashes       [][]byte `bencode:"-"`
+	PieceLength       uint     `bencode:"piece length"`
+	Length            uint     `bencode:"length"`
 
 	// For the purposes of the other keys, the multi-file case is treated as only having a single file
 	// by concatenating the files in the order they appear in the files list.
@@ -58,33 +73,33 @@ const MAX_PORT = 65535
 func NewTorrentFromMagnet(magnetURL *url.URL) (Torrent, error) {
 	var err error
 
-	var trackers = magnetURL.Query()["tr"]
+	var trackerUrls = magnetURL.Query()["tr"]
 	var name = magnetURL.Query().Get("dn")
 	var infoHash_hex = strings.TrimPrefix(magnetURL.Query().Get("xt"), "urn:btih:")
 	infoHash, err := hex.DecodeString(infoHash_hex)
 	// TODO: Validate magnet link & info hash
 
 	// parse trackers
-	Trackers := make([]*url.URL, len(trackers))
-	for i, t := range trackers {
+	trackers := make([]*url.URL, len(trackerUrls))
+	for i, t := range trackerUrls {
 		tracker, err := url.Parse(t)
 		if err != nil {
 			continue
 		}
-		Trackers[i] = tracker
+		trackers[i] = tracker
 	}
 
 	t := Torrent{
 		Name:        name,
-		Trackers:    Trackers,
-		PeerManager: peer.NewPeerManager(infoHash, []byte(constants.PEER_ID), Trackers),
+		Trackers:    trackers,
+		PeerManager: peer.NewPeerManager(infoHash, []byte(constants.PEER_ID), trackers),
 	}
 	copy(t.PeerID[:], []byte(constants.PEER_ID))
 	copy(t.InfoHash[:], infoHash)
 
 	// TODO Retrieve torrent metadata from the "swarm"... http://www.bittorrent.org/beps/bep_0009.html
 
-	// Fetch peers from first tracker to respond
+	// Start PeerManager which polls/updates trackers at intervals
 	go t.PeerManager.Start(6881)
 
 	t.PeerManager.WaitReady()
@@ -135,11 +150,9 @@ func (t Torrent) Download() {
 	// Okay, we have the piece hashes, now lets start some workers to fetch pieces incrementally
 	// For now, find the .mp4 file
 
-	// videoFile := string
+	var fileToDownload File
 
 	fmt.Println("##### Files #####")
-	// Download only .mp4 files
-	var fileToDownload File
 	if t.Length > 0 {
 		fileToDownload = File{
 			Path:   []string{t.Name},
@@ -167,21 +180,27 @@ func (t Torrent) Download() {
 		}
 		startByte += uint(file.Length)
 	}
-	// startPiece := startByte / t.PieceLength
-	// endPiece := (startByte + uint(fileToDownload.Length)) / t.PieceLength
-	startPiece := uint(0)
-	endPiece := uint(fileToDownload.Length) / t.PieceLength
+	startPiece := startByte / t.PieceLength
+	endPiece := (startByte+uint(fileToDownload.Length))/t.PieceLength - 1
+	blockCount := t.PieceLength / constants.BLOCK_SIZE
 
 	fmt.Printf("startPiece: %d, endPiece: %d\n", startPiece, endPiece)
 	connections := make([]client.Client, 0)
-	piecesQueue := make(chan uint, (endPiece-startPiece)+5)
-	for i := startPiece; i <= endPiece; i++ {
-		piecesQueue <- uint(i)
+	piecesQueue := make(lib.PriorityQueue, (endPiece - startPiece))
+	i := 0
+	for pieceIndex := startPiece; pieceIndex < endPiece; pieceIndex++ {
+		piecesQueue[i] = &lib.Item{
+			Value:    pieceIndex,
+			Priority: max(int(endPiece-pieceIndex), 1),
+			Index:    i,
+		}
+		i++
 	}
+	heap.Init(&piecesQueue)
 
 	max_connections := 10
 	wg := sync.WaitGroup{}
-	wg.Add(max_connections)
+	wg.Add(1)
 	fileLock := sync.Mutex{}
 	f, err := os.OpenFile(string(fileToDownload.Path[0]), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
@@ -205,96 +224,50 @@ func (t Torrent) Download() {
 				continue
 			}
 			// defer c.Conn.Close()
-			msg, err := message.Read(c.Conn)
-			fmt.Println("Pre-request message:", msg.TypeString())
-			peerBitfield := message.ParseBitfield(msg)
-
+			if msg, err := c.Read(); err == nil && msg.ID == message.MsgBitfield {
+				c.Bitfield = msg.Payload
+			}
+			wg.Add(1)
 			go func(peerIp net.IP) {
 				defer wg.Done()
-				// While there is items in piecesQueue,
-				errorCount := 0
-				for {
-					select {
-					case pieceIndex := <-piecesQueue:
-						// Download each piece in 16 kb blocks
-						blocks := t.PieceLength / constants.BLOCK_SIZE
-						if !peerBitfield.HasPiece(int(pieceIndex)) {
-							fmt.Printf("%v does not have piece #%v\n", peerIp, pieceIndex)
-							piecesQueue <- pieceIndex
-							continue
-						}
 
-						if pieceIndex == 420 {
-							fmt.Println("🔥🔥🔥🔥🔥🔥")
-						}
-						fmt.Printf("Piece #%d -> %v\n", pieceIndex, peerIp)
-						if pieceIndex == 420 {
-							fmt.Println("🔥🔥🔥🔥🔥🔥")
-						}
+				for !piecesQueue.IsEmpty() {
+					var pieceIndex = heap.Pop(&piecesQueue).(uint)
 
-						pieceBuffer := make([]byte, t.PieceLength)
-						for blockIndex := range make([]int, blocks) {
-							var msg = &message.Message{}
-							startByte := uint(blockIndex) * constants.BLOCK_SIZE
+					if !c.Bitfield.HasPiece(int(pieceIndex)) {
+						fmt.Printf("%v does not have piece #%v\n", peerIp, pieceIndex)
+						heap.Push(&piecesQueue, lib.NewPriorityItem(pieceIndex, max(int(endPiece-pieceIndex), 1)))
+						continue
+					}
+					fmt.Printf("Piece #%d -> %v\n", pieceIndex, peerIp)
+					pieceBuffer := make([]byte, t.PieceLength)
 
-							for {
-								fmt.Printf("Piece #%d block #%d -> %v\n", pieceIndex, blockIndex, peerIp)
-
-								// Throw away all messages until we get a piece
-								c.SendRequest(pieceIndex, startByte, constants.BLOCK_SIZE)
-								for msg.ID != message.MsgPiece {
-									msg, err = message.Read(c.Conn)
-									if err != nil {
-										msg = &message.Message{}
-										errorCount++
-										if errorCount > 3 {
-											piecesQueue <- pieceIndex
-											fmt.Printf("Dropping peer %v. Error limit reached\n", peerIp)
-											// t.PeerManager.SetPeerStatus(p.IP.String(), peer.BAD)
-											return
-										}
-										if err.Error() == "EOF" {
-											fmt.Printf("Recieved EOF error. Re-requesting piece #%v block #%d\n", pieceIndex, blockIndex)
-											break
-										} else {
-											fmt.Println("Error: ", err)
-										}
-									}
-								}
-								if msg.ID == message.MsgPiece {
-									_, err := message.ParsePiece(int(pieceIndex), pieceBuffer, msg)
-									if err != nil {
-										fmt.Println("Buffer error", err)
-									}
-									break
-								}
-							}
-						}
-
-						fmt.Printf("Piece #%v downloaded. bytes: %v\n", pieceIndex, len(pieceBuffer))
-						// Compare sha1 hash against metadata checksum
-						pieceHash := sha1.Sum(pieceBuffer[:])
-						checkSumMatch := pieceHash == [20]byte(t.PieceHashes[pieceIndex])
-						if !checkSumMatch {
-							fmt.Printf("Checksum Fail! for piece #%v\n", pieceIndex)
-
-							// drop piece
-							piecesQueue <- pieceIndex
-							continue
-						}
-						fmt.Printf("Matching Checksums for piece #%v!\n", pieceIndex)
-
-						byteOffset := int64((pieceIndex - startPiece) * t.PieceLength)
-						fmt.Printf("Writing piece #%v at byte offset %v\n", pieceIndex, byteOffset)
-
-						fileLock.Lock()
-						f.WriteAt(pieceBuffer[:], byteOffset)
-						fileLock.Unlock()
-
-					case <-time.After(100 * time.Millisecond):
-						fmt.Printf("Peer %v: piecesQueue empty\n", peerIp)
+					err := c.DownloadPiece(pieceBuffer, pieceIndex, blockCount)
+					if err != nil {
+						fmt.Printf("Error downloading piece #%v: %v Dropping peer %v\n", pieceIndex, err, peerIp)
+						heap.Push(&piecesQueue, lib.NewPriorityItem(pieceIndex, max(int(endPiece-pieceIndex), 1)))
 						return
 					}
+
+					fmt.Printf("Piece #%v downloaded. bytes: %v\n", pieceIndex, len(pieceBuffer))
+
+					// Compare sha1 hash against metadata checksum
+					pieceHash := sha1.Sum(pieceBuffer[:])
+					checkSumMatch := pieceHash == [20]byte(t.PieceHashes[pieceIndex])
+					if !checkSumMatch {
+						fmt.Printf("Checksum Fail! for piece #%v\n", pieceIndex)
+
+						heap.Push(&piecesQueue, lib.NewPriorityItem(pieceIndex, max(int(endPiece-pieceIndex), 1)))
+						continue
+					}
+					fmt.Printf("Matching Checksums for piece #%v!\n", pieceIndex)
+
+					byteOffset := int64((pieceIndex - startPiece) * t.PieceLength)
+
+					fmt.Printf("Writing piece #%v at byte offset %v\n", pieceIndex, byteOffset)
+					fileLock.Lock()
+					f.WriteAt(pieceBuffer[:], byteOffset)
+					fileLock.Unlock()
 				}
 			}(p.IP)
 		}
@@ -305,11 +278,7 @@ func (t Torrent) Download() {
 	fmt.Println("starting timer")
 	start := time.Now()
 	wg.Wait()
-	elapsedTime := time.Since(start)
-	fmt.Printf("Execution Time: %s\n", elapsedTime)
-
-	// NiceToHave: Downloading blocks in ascending order to enable streaming
-
+	fmt.Printf("Downloaded %s in %s\n", t.Name, time.Since(start))
 }
 
 func FromMetadata(metadata []byte) (Torrent, error) {
@@ -324,11 +293,26 @@ func FromMetadata(metadata []byte) (Torrent, error) {
 }
 
 func (t Torrent) WriteMetadataFile(dir string) error {
-	// filename := path.Join(dir, t.Name+".torrent")
-	// f, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR, 0644)
-	f := new(bytes.Buffer)
-	err := bencode.Marshal(f, t)
-	fmt.Println(f.String())
+	filename := path.Join(dir, t.Name+".torrent")
+	f, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return err
+	}
+	save := TorrentOut{
+		Info_hash:     t.InfoHash,
+		Announce_list: t.Trackers.String(),
+		Name:          t.Name,
+		Pieces:        t.PieceHashesString,
+		PieceLength:   t.PieceLength,
+	}
+	if len(t.Files) > 0 {
+		for _, file := range t.Files {
+			save.Files = append(save.Files, FileOut(file))
+		}
+	} else {
+		save.Length = t.Length
+	}
+	err = bencode.Marshal(f, save)
 	return err
 }
 

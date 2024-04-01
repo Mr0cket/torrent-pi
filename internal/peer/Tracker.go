@@ -14,7 +14,7 @@ func (pm PeerManager) Announce(peerChan chan []Peer, port uint16) {
 
 			switch tracker.Scheme {
 			case "http":
-				peers, err = pm.announceHTTP(tracker, port)
+				peers, err = pm.announceHTTP(*tracker, port)
 			case "udp":
 				peers, err = pm.announceUDP(*tracker, port)
 			default:
